@@ -3,8 +3,8 @@ using System.Collections.Generic;
 using UnityEditor.Search;
 using UnityEngine;
 
-[RequireComponent(typeof(Rigidbody2D))]
-public class ControllerCharacter2D : MonoBehaviour
+[RequireComponent(typeof(CharacterController))]
+public class ControllerCharacter : MonoBehaviour
 {
 	[SerializeField] float speed;
 	[SerializeField] float turnRate;
@@ -19,24 +19,26 @@ public class ControllerCharacter2D : MonoBehaviour
 	[SerializeField] Transform groundTransform;
 	[SerializeField] LayerMask groundLayerMask;
 
-	Rigidbody2D rb;
-	Vector2 velocity = Vector2.zero;
+	CharacterController characterController;
+	Vector3 velocity = Vector3.zero;
 
 	void Start()
 	{
-		rb = GetComponent<Rigidbody2D>();
+		characterController = GetComponent<CharacterController>();
 	}
 
 	void Update()
 	{
 		// check if the character is on the ground
-		bool onGround = Physics2D.OverlapCircle(groundTransform.position, 0.2f, groundLayerMask) != null;
+		bool onGround = Physics.CheckSphere(groundTransform.position, 0.2f, groundLayerMask, QueryTriggerInteraction.Ignore);
 
 		// get direction input
-		Vector2 direction = Vector2.zero;
+		Vector3 direction = Vector3.zero;
 		direction.x = Input.GetAxis("Horizontal");
+		direction.z = Input.GetAxis("Vertical");
 
 		velocity.x = direction.x * speed;
+		velocity.z = direction.z * speed;
 		// set velocity
 		if (onGround)
 		{
@@ -59,8 +61,40 @@ public class ControllerCharacter2D : MonoBehaviour
 		velocity.y += Physics.gravity.y * gravityMultiplier * Time.deltaTime;
 
 		// move character
-		rb.velocity = velocity;
-		
+		characterController.Move(velocity * Time.deltaTime);
+
+		Vector3 face = new Vector3(velocity.x, 0, velocity.z);
+		if (face.magnitude > 0)
+		{
+			transform.rotation = Quaternion.Slerp(transform.rotation, Quaternion.LookRotation(face), Time.deltaTime * turnRate);
+		}
+	}
+
+	void OnControllerColliderHit(ControllerColliderHit hit)
+	{
+		Rigidbody body = hit.collider.attachedRigidbody;
+
+		// no rigidbody
+		if (body == null || body.isKinematic)
+		{
+			return;
+		}
+
+		// We dont want to push objects below us
+		if (hit.moveDirection.y < -0.3)
+		{
+			return;
+		}
+
+		// Calculate push direction from move direction,
+		// we only push objects to the sides never up and down
+		Vector3 pushDir = new Vector3(hit.moveDirection.x, 0, hit.moveDirection.z);
+
+		// If you know how fast your character is trying to move,
+		// then you can also multiply the push velocity by that.
+
+		// Apply the push
+		body.velocity = pushDir * hitForce;
 	}
 
 	IEnumerator DoubleJump()
