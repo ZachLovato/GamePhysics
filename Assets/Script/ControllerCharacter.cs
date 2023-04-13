@@ -4,7 +4,7 @@ using UnityEditor.Search;
 using UnityEngine;
 
 [RequireComponent(typeof(Rigidbody2D))]
-public class ControllerCharacter2D : MonoBehaviour
+public class ControllerCharacter : MonoBehaviour
 {
 	[SerializeField] float speed;
 	[SerializeField] float turnRate;

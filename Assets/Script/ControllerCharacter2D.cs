@@ -3,12 +3,11 @@ using System.Collections.Generic;
 using UnityEditor.Search;
 using UnityEngine;
 
-[RequireComponent(typeof(CharacterController))]
-public class ControllerCharacter : MonoBehaviour
+[RequireComponent(typeof(Rigidbody2D))]
+public class ControllerCharacter2D : MonoBehaviour
 {
+	[Header("Info")]
 	[SerializeField] float speed;
-	[SerializeField] float turnRate;
-	[SerializeField] float hitForce;
 	[Header("Jump")] 
 	[SerializeField] float jumpHeight;
 	[SerializeField] float doubleJumpHeight;
@@ -18,40 +17,54 @@ public class ControllerCharacter : MonoBehaviour
 	[Header("Ground")]
 	[SerializeField] Transform groundTransform;
 	[SerializeField] LayerMask groundLayerMask;
+	[SerializeField] float groundRadius;
+	[Header("Animation")]
+	[SerializeField] Animator animator;
+	[SerializeField] SpriteRenderer spriteRenderer;
+	[Header("Attack")]
+	[SerializeField] Transform attackTransform;
+	[SerializeField] float attackRadius;
 
-	CharacterController characterController;
-	Vector3 velocity = Vector3.zero;
+	//CharacterController characterController;
+	Rigidbody2D rb;
+
+	Vector2 velocity = Vector2.zero;
+	bool faceRight = true;
+	float groundAngle = 0;
 
 	void Start()
 	{
-		characterController = GetComponent<CharacterController>();
+		rb = GetComponent<Rigidbody2D>();
 	}
 
 	void Update()
 	{
-		// check if the character is on the ground
-		bool onGround = Physics.CheckSphere(groundTransform.position, 0.2f, groundLayerMask, QueryTriggerInteraction.Ignore);
+		bool onGround = UpdateGroundCheck();
 
 		// get direction input
-		Vector3 direction = Vector3.zero;
+		Vector2 direction = Vector2.zero;
 		direction.x = Input.GetAxis("Horizontal");
-		direction.z = Input.GetAxis("Vertical");
+		// transform direction to slope space
+		direction = Quaternion.AngleAxis(groundAngle, Vector3.forward) * direction;
+		Debug.DrawRay(transform.position, direction, Color.green);
 
 		velocity.x = direction.x * speed;
-		velocity.z = direction.z * speed;
+
 		// set velocity
 		if (onGround)
 		{
-			
-			if (velocity.y < 0 ) velocity.y = 0;
-			if ( Input.GetButtonDown("Jump"))
+			if (velocity.y < 0) velocity.y = 0;
+			if (Input.GetButtonDown("Jump"))
 			{
 				velocity.y += Mathf.Sqrt(jumpHeight * -2 * Physics.gravity.y);
 				StartCoroutine(DoubleJump());
+				animator.SetTrigger("Jump");
+			}
+			if (Input.GetMouseButtonDown(0))
+			{
+				animator.SetTrigger("Attack");
 			}
 		}
-
-		velocity.y += Physics.gravity.y * Time.deltaTime;
 
 		// adjust gravity for jump
 		float gravityMultiplier = 1;
@@ -61,40 +74,15 @@ public class ControllerCharacter : MonoBehaviour
 		velocity.y += Physics.gravity.y * gravityMultiplier * Time.deltaTime;
 
 		// move character
-		characterController.Move(velocity * Time.deltaTime);
+		rb.velocity = velocity;
 
-		Vector3 face = new Vector3(velocity.x, 0, velocity.z);
-		if (face.magnitude > 0)
-		{
-			transform.rotation = Quaternion.Slerp(transform.rotation, Quaternion.LookRotation(face), Time.deltaTime * turnRate);
-		}
-	}
+		// flip character to face direction of movement (velocity)
+		if (velocity.x > 0 && !faceRight) Flip();
+		if (velocity.x < 0 && faceRight) Flip();
 
-	void OnControllerColliderHit(ControllerColliderHit hit)
-	{
-		Rigidbody body = hit.collider.attachedRigidbody;
-
-		// no rigidbody
-		if (body == null || body.isKinematic)
-		{
-			return;
-		}
-
-		// We dont want to push objects below us
-		if (hit.moveDirection.y < -0.3)
-		{
-			return;
-		}
-
-		// Calculate push direction from move direction,
-		// we only push objects to the sides never up and down
-		Vector3 pushDir = new Vector3(hit.moveDirection.x, 0, hit.moveDirection.z);
-
-		// If you know how fast your character is trying to move,
-		// then you can also multiply the push velocity by that.
-
-		// Apply the push
-		body.velocity = pushDir * hitForce;
+		// update animator
+		animator.SetFloat("Speed", Mathf.Abs(velocity.x));
+		animator.SetBool("Fall", !onGround && velocity.y < -0.1f);
 	}
 
 	IEnumerator DoubleJump()
@@ -113,4 +101,50 @@ public class ControllerCharacter : MonoBehaviour
 			yield return null;
 		}
 	}
+
+	private bool UpdateGroundCheck()
+	{
+		// check if the character is on the ground
+		Collider2D collider = Physics2D.OverlapCircle(groundTransform.position, groundRadius, groundLayerMask);
+		if (collider != null)
+		{
+			RaycastHit2D raycastHit = Physics2D.Raycast(groundTransform.position, Vector2.down, groundRadius, groundLayerMask);
+			if (raycastHit.collider != null)
+			{
+				// get the angle of the ground (angle between up vector and ground normal)
+				groundAngle = Vector2.SignedAngle(Vector2.up, raycastHit.normal);
+				Debug.DrawRay(raycastHit.point, raycastHit.normal, Color.red);
+			}
+		}
+
+		return (collider != null);
+	}
+
+	private void Flip()
+	{
+		faceRight = !faceRight;
+		spriteRenderer.flipX = !faceRight;
+	}
+
+	private void OnDrawGizmos()
+	{
+		Gizmos.color = Color.red;
+		Gizmos.DrawSphere(groundTransform.position, groundRadius);
+
+	}
+
+	private void CheckAttack()
+	{
+		Collider2D[] colliders = Physics2D.OverlapCircleAll(attackTransform.position, attackRadius);
+		foreach (Collider2D collider in colliders)
+		{
+			if (collider.gameObject == gameObject) continue;
+
+			if (collider.gameObject.TryGetComponent<IDamageable>(out var damagable))
+			{
+				damagable.Damage(10);
+			}
+		}
+	}
+
 }

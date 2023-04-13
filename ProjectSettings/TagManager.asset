@@ -5,6 +5,7 @@ TagManager:
   serializedVersion: 2
   tags:
   - Plank
+  - Kjkmo
   layers:
   - Default
   - TransparentFX
@@ -12,7 +13,7 @@ TagManager:
   - Player
   - Water
   - UI
-  - 
+  - Enemy
   - 
   - 
   - 
@@ -39,6 +40,9 @@ TagManager:
   - 
   - 
   m_SortingLayers:
+  - name: Background
+    uniqueID: 712739175
+    locked: 0
   - name: Default
     uniqueID: 0
     locked: 0
